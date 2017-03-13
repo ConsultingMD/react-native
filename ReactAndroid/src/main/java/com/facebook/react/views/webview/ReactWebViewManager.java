@@ -459,7 +459,7 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
     reactContext.addActivityEventListener(new ActivityEventListener() {
       @Override
       public void onActivityResult (Activity activity, int requestCode, int resultCode, Intent data) {
-        if(requestCode != INPUT_FILE_REQUEST_CODE) {
+        if(requestCode != INPUT_FILE_REQUEST_CODE || mFilePathCallback == null) {
           return;
         }
         Uri[] results = null;
@@ -479,7 +479,12 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
           }
         }
 
-        if(results != null) mFilePathCallback.onReceiveValue(results);
+        if(results == null) {
+          mFilePathCallback.onReceiveValue(new Uri[]{});
+        }
+        else {
+          mFilePathCallback.onReceiveValue(results);
+        }
         mFilePathCallback = null;
         return;
       }
