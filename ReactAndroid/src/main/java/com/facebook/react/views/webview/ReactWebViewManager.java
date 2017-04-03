@@ -130,8 +130,8 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
     public void onPageFinished(WebView webView, String url) {
       super.onPageFinished(webView, url);
 
-      if (!mLastLoadFailed) {
-        ReactWebView reactWebView = (ReactWebView) webView;
+      ReactWebView reactWebView = (ReactWebView) webView;
+      if (!reactWebView.mLastLoadFailed) {
         reactWebView.callInjectedJavaScript();
         reactWebView.linkBridge();
         emitFinishEvent(webView, url);
@@ -141,13 +141,14 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
     @Override
     public void onPageStarted(WebView webView, String url, Bitmap favicon) {
       super.onPageStarted(webView, url, favicon);
-      mLastLoadFailed = false;
+      ReactWebView reactWebView = (ReactWebView) webView;
+      reactWebView.mLastLoadFailed = false;
 
       dispatchEvent(
           webView,
           new TopLoadingStartEvent(
               webView.getId(),
-              createWebViewEvent(webView, url)));
+              reactWebView.createWebViewEvent(url)));
     }
 
     @Override
@@ -187,13 +188,15 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
         String description,
         String failingUrl) {
       super.onReceivedError(webView, errorCode, description, failingUrl);
-      mLastLoadFailed = true;
+
+      ReactWebView reactWebView = (ReactWebView) webView;
+      reactWebView.mLastLoadFailed = true;
 
       // In case of an error JS side expect to get a finish event first, and then get an error event
       // Android WebView does it in the opposite way, so we need to simulate that behavior
       emitFinishEvent(webView, failingUrl);
 
-      WritableMap eventData = createWebViewEvent(webView, failingUrl);
+      WritableMap eventData = reactWebView.createWebViewEvent(failingUrl);
       eventData.putDouble("code", errorCode);
       eventData.putString("description", description);
 
@@ -202,12 +205,25 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
           new TopLoadingErrorEvent(webView.getId(), eventData));
     }
 
+    @Override
+    public void doUpdateVisitedHistory(WebView webView, String url, boolean isReload) {
+      super.doUpdateVisitedHistory(webView, url, isReload);
+
+      ReactWebView reactWebView = (ReactWebView) webView;
+      dispatchEvent(
+          webView,
+          new TopLoadingStartEvent(
+              webView.getId(),
+            reactWebView.createWebViewEvent(url)));
+    }
+
     protected void emitFinishEvent(WebView webView, String url) {
+      ReactWebView reactWebView = (ReactWebView) webView;
       dispatchEvent(
           webView,
           new TopLoadingFinishEvent(
               webView.getId(),
-              createWebViewEvent(webView, url)));
+              reactWebView.createWebViewEvent(url)));
     }
 
     protected WritableMap createWebViewEvent(WebView webView, String url) {
@@ -236,6 +252,7 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
     protected @Nullable String injectedJS;
     protected boolean messagingEnabled = false;
     protected @Nullable ReactWebViewClient mReactWebViewClient;
+    public boolean mLastLoadFailed = false;
 
     protected class ReactWebViewBridge {
       ReactWebView mContext;
@@ -348,6 +365,20 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
       setWebViewClient(null);
       destroy();
     }
+
+    public WritableMap createWebViewEvent(String url) {
+      WritableMap event = Arguments.createMap();
+      event.putDouble("target", this.getId());
+      // Don't use webView.getUrl() here, the URL isn't updated to the new value yet in callbacks
+      // like onPageFinished
+      event.putString("url", url);
+      event.putBoolean("loading", !this.mLastLoadFailed && this.getProgress() != 100);
+      event.putString("title", this.getTitle());
+      event.putBoolean("canGoBack", this.canGoBack());
+      event.putBoolean("canGoForward", this.canGoForward());
+      return event;
+    }
+
   }
 
   public ReactWebViewManager() {
@@ -372,7 +403,7 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
 
   @Override
   protected WebView createViewInstance(final ThemedReactContext reactContext) {
-    ReactWebView webView = createReactWebViewInstance(reactContext);
+    final ReactWebView webView = new ReactWebView(reactContext);
     webView.setWebChromeClient(new WebChromeClient() {
       @Override
       public boolean onConsoleMessage(ConsoleMessage message) {
@@ -382,6 +413,23 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
         // Ignore console logs in non debug builds.
         return true;
       }
+
+      @Override
+      public void onProgressChanged(WebView view, int newProgress) {
+        super.onProgressChanged(view, newProgress);
+
+        if(newProgress != 100) {
+          return;
+        }
+
+        WritableMap event = webView.createWebViewEvent(view.getUrl());
+        dispatchEvent(
+          view,
+          new TopLoadingFinishEvent(
+            view.getId(),
+            event));
+      }
+    });
 
       @Override
       public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
