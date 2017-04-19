@@ -214,7 +214,7 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
           webView,
           new TopLoadingStartEvent(
               webView.getId(),
-            reactWebView.createWebViewEvent(url)));
+              reactWebView.createWebViewEvent(url)));
     }
 
     protected void emitFinishEvent(WebView webView, String url) {
