@@ -418,7 +418,7 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
       public void onProgressChanged(WebView view, int newProgress) {
         super.onProgressChanged(view, newProgress);
 
-        if(newProgress != 100) {
+        if (newProgress != 100) {
           return;
         }
 
@@ -427,9 +427,10 @@ public class ReactWebViewManager extends SimpleViewManager<WebView> {
           view,
           new TopLoadingFinishEvent(
             view.getId(),
-            event));
+            event
+          )
+        );
       }
-    });
 
       @Override
       public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
